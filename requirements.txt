@@ -1,0 +1,8 @@
+pandas
+langgraph 
+langchain 
+python-dotenv 
+notebook 
+mcp 
+langchain_mcp_adapters
+langchain_openai
