@@ -488,16 +488,24 @@ Rewrite as ONE LINE intent that does not depend on vague references.
 # AGENT 4: Join Planner
 # -------------------------------------------------------
 async def join_planner(state: State):
+    schema_block = json.loads(state["schema_json"])  # allowed subset
     prompt = f"""
-You are a join planner.
-Rewritten intent: {state['rewritten_query']}
-Schema:
-{state['schema_text']}
+You are a join planner for SQLite.
+
+You must ONLY use the tables/columns and join hints inside this JSON:
+
+allowed_schema = {json.dumps(schema_block, indent=2)}
+
+Use fk_candidates to propose 1–3 valid join paths.
+If no valid join path exists in allowed_schema, respond with a single-table plan.
+
+Rewritten intent:
+{state['rewritten_query']}
 
 Return:
-tables: ...
+tables: [...]
 joins:
-tableA.col = tableB.col
+  - tableA.col = tableB.col
 """
 
     out = await llm_complete(prompt)
@@ -508,7 +516,6 @@ tableA.col = tableB.col
         "join_plan": state["join_plan"],
         "error": None,
     }
-
 
 # -------------------------------------------------------
 # AGENT 5: SQL Generator
