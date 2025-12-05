@@ -1,6 +1,6 @@
 import gradio as gr
 import asyncio
-from trial_with_memory import chat
+from trial_with_memory_schema_catalog import chat
 
 # Helper to run async LangGraph chat() inside Gradio
 def run_async(coro):
