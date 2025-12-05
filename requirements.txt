@@ -7,3 +7,4 @@ mcp
 langchain_mcp_adapters
 langchain_openai
 gradio
+langsmith

@@ -10,6 +10,7 @@ dependencies = [
     "langchain-mcp-adapters>=0.1.14",
     "langchain-openai>=1.1.0",
     "langgraph>=1.0.4",
+    "langsmith>=0.4.53",
     "mcp>=1.23.1",
     "notebook>=7.5.0",
     "pandas>=2.3.3",

@@ -592,6 +592,7 @@ async def static_analyzer(state: State):
 # -------------------------------------------------------
 async def executor(state: State):
     history = state.get("conversation_history") or []
+    history = to_python(history)
     state["conversation_history"] = history
 
     sql = state.get("sql_query", "")
@@ -807,16 +808,16 @@ async def chat(query: str, thread_id: str = DEFAULT_THREAD):
 
 # %%
 # Example interactive calls
-resp = await chat("What is total order_amount for 2024?")
-print(resp)
+# resp = await chat("What is total order_amount for 2024?")
+# print(resp)
 
 
 # resp2 = await chat("Break it down by month")
 # print(resp2)
 
 # %%
-resp2 = await chat("Which customer segments experience the highest delivery delays?")
-print(resp2)
+# resp2 = await chat("Which customer segments experience the highest delivery delays?")
+# print(resp2)
 
 # %%
 
