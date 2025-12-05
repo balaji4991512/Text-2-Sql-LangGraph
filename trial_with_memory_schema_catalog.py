@@ -371,6 +371,18 @@ async def llm_complete(prompt: str) -> str:
         return await loop.run_in_executor(None, sync_call)
 
 # %%
+from functools import lru_cache
+
+@lru_cache(maxsize=256)
+def cached_schema_retrieval(query_key: str) -> dict:
+    # key can be normalized query or token signature
+    return simple_schema_retrieval(query_key, SCHEMA_CATALOG, n=8)
+
+def schema_retrieval_key(query: str) -> str:
+    tokens = sorted(set(re.findall(r"\w+", query.lower())))
+    return " ".join(tokens)
+
+# %%
 # ============================================
 # CELL 6 - LangGraph State + 8 Agents (FINAL)
 # ============================================
@@ -400,7 +412,8 @@ async def schema_retrieval(state: State):
     state["conversation_history"] = to_python(history)
 
     q = state["user_query"]
-    found = simple_schema_retrieval(q, SCHEMA_CATALOG, n=8)
+    key = schema_retrieval_key(q)
+    found = cached_schema_retrieval(key)
 
     state["schema_json"] = json.dumps(to_python(found))
     state["schema_text"] = summarize_schema_block_safe(found)
@@ -517,6 +530,7 @@ joins:
         "error": None,
     }
 
+
 # -------------------------------------------------------
 # AGENT 5: SQL Generator
 # -------------------------------------------------------
@@ -524,17 +538,27 @@ async def sql_generator(state: State):
     history = state.get("conversation_history") or []
     state["conversation_history"] = history
 
+    allowed_schema = json.loads(state["schema_json"])
+
     prompt = f"""
-Generate a VALID SQLite SQL query for this intent:
+You are a SQLite SQL generator.
+
+You MUST obey this rule STRICTLY:
+- Use ONLY tables and columns present in `allowed_schema`.
+- If user asks for something that requires tables/columns not in allowed_schema,
+  explain that those fields are not available.
+
+allowed_schema (JSON):
+{json.dumps(allowed_schema, indent=2)}
+
+Rewritten intent:
 {state['rewritten_query']}
 
-Join plan:
-{state['join_plan']}
+Join plan (optional, may be empty):
+{state.get('join_plan', '')}
 
-Schema:
-{state['schema_text']}
-
-Return ONLY the SQL. No markdown.
+Generate ONE valid SQLite SELECT statement.
+Do NOT wrap in markdown. Only the SQL.
 """
 
     raw = await llm_complete(prompt)
@@ -572,12 +596,22 @@ async def static_analyzer(state: State):
     sql = state.get("sql_query", "")
     errors = []
 
-    # Block dangerous operations
+    # 1) Block destructive ops
     if re.search(r"\b(drop|delete|update|insert|alter)\b", sql, re.I):
         errors.append("Unsafe operation detected")
 
-    # Simple heuristic — but allow SUM without GROUP BY for now
-    # (you can improve this later if needed)
+    # 2) Rough unknown table/column detection using SCHEMA_CATALOG
+    #    (very simple parsing – not perfect, but catches many mistakes)
+    lower_sql = sql.lower()
+
+    known_tables = set(SCHEMA_CATALOG.keys())
+    used_tables = {t for t in known_tables if t.lower() in lower_sql}
+
+    if not used_tables:
+        errors.append("No known tables found in SQL.")
+
+    # Optionally, you can parse columns by splitting after "select" and checking
+    # them against columns from used_tables (best-effort, not full SQL parser).
 
     if errors:
         issue = "; ".join(errors)
@@ -592,6 +626,7 @@ async def static_analyzer(state: State):
         "messages": [{"role": "system", "content": "Static analysis OK"}],
         "error": None,
     }
+
 
 
 # -------------------------------------------------------
